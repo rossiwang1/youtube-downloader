@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube视频下载器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold text-center mb-8">YouTube视频下载器</h1>
+        
+        <!-- 下载表单 -->
+        <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="flex gap-4">
+                <input type="text" id="url" 
+                       class="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="请输入YouTube视频链接">
+                <button onclick="startDownload()" 
+                        class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                    下载
+                </button>
+            </div>
+            
+            <!-- 下载进度 -->
+            <div id="progress" class="hidden mt-4">
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+                <div id="progress-text" class="text-sm text-gray-600 mt-2"></div>
+            </div>
+        </div>
+
+        <!-- 视频信息 -->
+        <div id="video-info" class="hidden max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6 mb-8">
+            <h3 class="text-xl font-semibold mb-4">视频信息</h3>
+            <div id="video-details"></div>
+        </div>
+
+        <!-- 已下载视频列表 -->
+        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-2xl font-semibold mb-4">已下载视频</h2>
+            <div class="grid gap-4" id="video-list">
+                {% for video in videos %}
+                <div class="border rounded-lg p-4">
+                    <h4 class="font-medium mb-2">{{ video.filename }}</h4>
+                    <p class="text-sm text-gray-600 mb-2">大小: {{ video.size }}</p>
+                    <video controls class="w-full rounded-lg">
+                        <source src="{{ video.path }}" type="video/mp4">
+                    </video>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://${window.location.host}/ws`);
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.status === 'downloading') {
+                    document.getElementById('progress').classList.remove('hidden');
+                    document.getElementById('progress-bar').style.width = data.percentage;
+                    document.getElementById('progress-text').textContent = 
+                        `下载进度: ${data.percentage} | 速度: ${data.speed} | 剩余时间: ${data.eta}`;
+                }
+                else if (data.status === 'complete') {
+                    document.getElementById('progress').classList.add('hidden');
+                    document.getElementById('video-info').classList.remove('hidden');
+                    
+                    const details = `
+                        <p><strong>标题:</strong> ${data.title}</p>
+                        <p><strong>时长:</strong> ${data.duration}秒</p>
+                        <p><strong>上传者:</strong> ${data.uploader}</p>
+                        <p><strong>描述:</strong> ${data.description}</p>
+                    `;
+                    document.getElementById('video-details').innerHTML = details;
+                    
+                    // 刷新页面以显示新下载的视频
+                    setTimeout(() => location.reload(), 2000);
+                }
+                else if (data.status === 'error') {
+                    alert('下载出错: ' + data.message);
+                }
+            };
+            
+            ws.onclose = function() {
+                setTimeout(connectWebSocket, 1000);
+            };
+        }
+
+        function startDownload() {
+            const url = document.getElementById('url').value;
+            if (!url) {
+                alert('请输入视频链接');
+                return;
+            }
+            ws.send(url);
+        }
+
+        connectWebSocket();
+    </script>
+</body>
+</html>
